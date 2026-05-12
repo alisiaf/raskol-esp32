@@ -58,9 +58,9 @@ while True:
                 blockArray = bytearray(16)
                 for sector in range(0, 6):
                     rdr.read(sector, into=blockArray)
-                    #print("Blok dat c.%d: " % sector, end="")
-                    #print('-'.join(f'{b:02x}' for b in blockArray))
-                    #print(blockArray)
+                    print("Blok dat c.%d: " % sector, end="")
+                    print('-'.join(f'{b:02x}' for b in blockArray))
+                    print(blockArray)
                     if sector==4:
                         blockArray0=blockArray
                     if  sector==5:
