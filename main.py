@@ -135,49 +135,16 @@ def motors_right(speed=TURN_SPEED):
     left_motor.forward(speed)
     right_motor.reverse(speed)
 
-def get_exact_text(chunks):
-    full_data = bytearray()
-    for c in chunks:
-        full_data.extend(c)
-
-    try:
-        if b'T' not in full_data:
-            return "Пустая метка"
-
-        t_idx = full_data.index(b'T')
-        payload_len = full_data[t_idx - 1]
-        status_byte = full_data[t_idx + 1]
-        lang_len = status_byte & 0x3F
-        text_start = t_idx + 2 + lang_len
-        pure_text_len = payload_len - (1 + lang_len)
-        text_bytes = full_data[text_start : text_start + pure_text_len]
-        return text_bytes.decode('utf-8')
-    except Exception as e:
-        return "Ошибка: {}".format(e)
-
 def read_rfid_text():
+    """Читает RFID-метку и возвращает её UID как строку, либо None."""
     (stat, tag_type) = rfid.request(rfid.REQIDL)
     if stat != rfid.OK:
         return None
-
     (stat, raw_uid) = rfid.anticoll()
     if stat != rfid.OK:
         return None
-
-    if rfid.select_tag(raw_uid) != rfid.OK:
-        return None
-
-    block0 = bytearray(16)
-    block1 = bytearray(16)
-    if rfid.read(4, into=block0) is None:
-        rfid.stop_crypto1()
-        return None
-    if rfid.read(5, into=block1) is None:
-        rfid.stop_crypto1()
-        return None
-    rfid.stop_crypto1()
-
-    return get_exact_text([block0, block1])
+    uid_str = '-'.join('{:02X}'.format(b) for b in raw_uid)
+    return uid_str
 
 def grab_and_read_rfid():
     servo_write(grip_pwm, GRIP_CLOSED_ANGLE)
@@ -210,6 +177,7 @@ def bucket_down():
     send_status("bucket=" + str(bucket_angle))
 
 ble = bluetooth.BLE()
+ble.config(gap_name=BLE_NAME)
 uart = BLEUART(ble, name=BLE_NAME)
 uart.irq(handler=on_rx)
 
@@ -225,7 +193,6 @@ send_status("ready")
 
 async def do_it(int_ms):
     global comand, on
-
     while True:
         await asio.sleep_ms(int_ms)
 
@@ -264,25 +231,25 @@ async def do_it(int_ms):
             send_status("move=stop")
             comand = ""
 
-        elif comand == "1" or comand == "BTN1" or comand == "B1":
+        elif comand == "1":
             print("Кнопка 1: захват и чтение RFID")
             pulse_led()
             grab_and_read_rfid()
             comand = ""
 
-        elif comand == "2" or comand == "BTN2" or comand == "B2":
+        elif comand == "2":
             print("Кнопка 2: разжатие")
             pulse_led()
             release_cube()
             comand = ""
 
-        elif comand == "3" or comand == "BTN3" or comand == "B3":
+        elif comand == "3":
             print("Кнопка 3: ковш вверх")
             pulse_led()
             bucket_up()
             comand = ""
 
-        elif comand == "4" or comand == "BTN4" or comand == "B4":
+        elif comand == "4":
             print("Кнопка 4: ковш вниз")
             pulse_led()
             bucket_down()
