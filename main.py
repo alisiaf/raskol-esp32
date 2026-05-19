@@ -1,4 +1,4 @@
-from machine import I2C, Pin, PWM, SPI
+from machine import Pin, PWM, SPI
 from micropython import const
 import bluetooth
 import time
@@ -135,16 +135,54 @@ def motors_right(speed=TURN_SPEED):
     left_motor.forward(speed)
     right_motor.reverse(speed)
 
+def get_exact_text(chunks):
+    full_data = bytearray()
+    for c in chunks:
+        full_data.extend(c)
+    try:
+        if b'T' not in full_data:
+            return "Пустая метка"
+        t_idx = full_data.index(b'T')
+        payload_len = full_data[t_idx - 1]
+        status_byte = full_data[t_idx + 1]
+        lang_len = status_byte & 0x3F
+        text_start = t_idx + 2 + lang_len
+        pure_text_len = payload_len - (1 + lang_len)
+        text_bytes = full_data[text_start : text_start + pure_text_len]
+        return text_bytes.decode('utf-8')
+    except Exception as e:
+        return "Ошибка: {}".format(e)
+
 def read_rfid_text():
-    """Читает RFID-метку и возвращает её UID как строку, либо None."""
     (stat, tag_type) = rfid.request(rfid.REQIDL)
+    print("Request stat:", stat)
     if stat != rfid.OK:
         return None
     (stat, raw_uid) = rfid.anticoll()
+    print("Anticoll stat:", stat)
     if stat != rfid.OK:
         return None
-    uid_str = '-'.join('{:02X}'.format(b) for b in raw_uid)
-    return uid_str
+    print("UID:", [hex(b) for b in raw_uid])
+    if rfid.select_tag(raw_uid) != rfid.OK:
+        print("Select failed")
+        return None
+    # Аутентификация сектора 1 (блок 4)
+    key = b'\xff\xff\xff\xff\xff\xff'
+    auth_stat = rfid.auth(rfid.AUTHENT1A, 4, key, raw_uid)
+    print("Auth stat:", auth_stat)
+    if auth_stat != rfid.OK:
+        rfid.stop_crypto1()
+        return None
+    block4 = bytearray(16)
+    block5 = bytearray(16)
+    stat4 = rfid.read(4, into=block4)
+    print("Read block 4 stat:", stat4, "data:", block4)
+    stat5 = rfid.read(5, into=block5)
+    print("Read block 5 stat:", stat5, "data:", block5)
+    rfid.stop_crypto1()
+    if stat4 is None or stat5 is None:
+        return None
+    return get_exact_text([block4, block5])
 
 def grab_and_read_rfid():
     servo_write(grip_pwm, GRIP_CLOSED_ANGLE)
