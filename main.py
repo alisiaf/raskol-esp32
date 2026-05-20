@@ -9,7 +9,6 @@ from BLEUART import BLEUART
 from MX1508 import MX1508
 from mfrc522 import MFRC522
 
-# ---------- ПИНЫ ----------
 LEFT_MOTOR_IN1 = 25
 LEFT_MOTOR_IN2 = 26
 RIGHT_MOTOR_IN1 = 27
@@ -29,13 +28,11 @@ NUM_LEDS = 8
 
 BLE_NAME = "RASKOL_BOT"
 
-# ---------- ПАРАМЕТРЫ ДВИЖЕНИЯ ----------
 DRIVE_SPEED = 900
 TURN_SPEED  = 900
 
-# ---------- ПАРАМЕТРЫ СЕРВО 360° ----------
 SERVO_FREQ = 50
-SERVO_STOP_DUTY = 77          # нейтраль (остановка) – подберите, если нужно
+SERVO_STOP_DUTY = 77          #  остановка - ещё подбирать 
 SERVO_FULL_SPEED_DUTY = 20    # максимальная скорость вперёд
 SERVO_REVERSE_SPEED_DUTY = 120 # максимальная скорость назад
 
@@ -43,17 +40,14 @@ GRIP_CLOSE_TIME_MS = 500       # время закрытия клешни
 GRIP_OPEN_TIME_MS = 500        # время открытия
 BUCKET_MOVE_TIME_MS = 300      # время движения ковша на один шаг
 
-# ---------- ПАРАМЕТРЫ КОВША (виртуальный угол для отслеживания) ----------
 BUCKET_MIN_ANGLE   = 20
 BUCKET_MAX_ANGLE   = 160
 BUCKET_START_ANGLE = 90
 BUCKET_STEP        = 10
 
-# ---------- ПРОЧЕЕ ----------
 LOOP_DELAY_MS  = const(20)
 LED_PULSE_MS   = const(150)
 
-# ---------- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ----------
 comand = ""
 on = 0
 bucket_angle = BUCKET_START_ANGLE
@@ -81,7 +75,6 @@ bucket_pwm.freq(SERVO_FREQ)
 spi_rfid = SPI(2, sck=Pin(RFID_SCK), mosi=Pin(RFID_MOSI), miso=Pin(RFID_MISO))
 rfid = MFRC522(spi=spi_rfid, gpioRst=Pin(RFID_RST), gpioCs=Pin(RFID_CS))
 
-# ---------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ----------
 def clamp(value, low, high):
     return min(high, max(low, value))
 
@@ -163,7 +156,6 @@ def on_rx():
     except Exception as e:
         print("Ошибка декодирования:", e)
 
-# ---------- ДВИЖЕНИЕ ----------
 def motors_stop():
     left_motor.stop()
     right_motor.stop()
@@ -240,7 +232,6 @@ def read_rfid_text():
         return None
     return get_exact_text([block4, block5])
 
-# ---------- ЗАХВАТ И КОВШ ----------
 def grab_and_read_rfid():
     grip_close()                    # закрываем клешню
     tag_text = read_rfid_text()
@@ -280,13 +271,11 @@ def bucket_down():
     print("Ковш вниз, угол:", bucket_angle)
     send_status("bucket=" + str(bucket_angle))
 
-# ---------- ИНИЦИАЛИЗАЦИЯ BLE ----------
 ble = bluetooth.BLE()
 ble.config(gap_name=BLE_NAME)
 uart = BLEUART(ble, name=BLE_NAME)
 uart.irq(handler=on_rx)
 
-# ---------- СТАРТОВОЕ ПОЛОЖЕНИЕ ----------
 motors_stop()
 servo_stop(grip_pwm)
 servo_stop(bucket_pwm)
@@ -298,7 +287,6 @@ print("Движение: 516-вперед, 615-назад, 414-влево, 315-�
 print("Кнопки: 1-захват+RFID, 2-разжать, 3-ковш вверх, 4-ковш вниз")
 send_status("ready")
 
-# ---------- АСИНХРОННЫЙ ЦИКЛ ----------
 async def do_it(int_ms):
     global comand, on
     while True:
