@@ -3,11 +3,13 @@ from micropython import const
 import bluetooth
 import time
 import uasyncio as asio
+from neopixel import NeoPixel
 
 from BLEUART import BLEUART
 from MX1508 import MX1508
 from mfrc522 import MFRC522
 
+# ---------- ПИНЫ ----------
 LEFT_MOTOR_IN1 = 25
 LEFT_MOTOR_IN2 = 26
 RIGHT_MOTOR_IN1 = 27
@@ -22,56 +24,102 @@ RFID_MISO = 19
 RFID_CS   = 22
 RFID_RST  = 21
 
+LED_PIN = 12
+NUM_LEDS = 8
+
 BLE_NAME = "RASKOL_BOT"
 
+# ---------- ПАРАМЕТРЫ ДВИЖЕНИЯ ----------
 DRIVE_SPEED = 900
 TURN_SPEED  = 900
 
-GRIP_OPEN_ANGLE   = 110
-GRIP_CLOSED_ANGLE = 55
+# ---------- ПАРАМЕТРЫ СЕРВО 360° ----------
+SERVO_FREQ = 50
+SERVO_STOP_DUTY = 77          # нейтраль (остановка) – подберите, если нужно
+SERVO_FULL_SPEED_DUTY = 20    # максимальная скорость вперёд
+SERVO_REVERSE_SPEED_DUTY = 120 # максимальная скорость назад
 
+GRIP_CLOSE_TIME_MS = 500       # время закрытия клешни
+GRIP_OPEN_TIME_MS = 500        # время открытия
+BUCKET_MOVE_TIME_MS = 300      # время движения ковша на один шаг
+
+# ---------- ПАРАМЕТРЫ КОВША (виртуальный угол для отслеживания) ----------
 BUCKET_MIN_ANGLE   = 20
 BUCKET_MAX_ANGLE   = 160
 BUCKET_START_ANGLE = 90
 BUCKET_STEP        = 10
 
-SERVO_FREQ      = 50
-SERVO_MIN_DUTY  = 20
-SERVO_MAX_DUTY  = 120
-
+# ---------- ПРОЧЕЕ ----------
 LOOP_DELAY_MS  = const(20)
 LED_PULSE_MS   = const(150)
 
+# ---------- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ----------
 comand = ""
 on = 0
 bucket_angle = BUCKET_START_ANGLE
 led_pulse_started = 0
 
+# Встроенный светодиод
 led = Pin(2, Pin.OUT)
 led.value(0)
 
+# Адресная лента
+np = NeoPixel(Pin(LED_PIN), NUM_LEDS)
+
+# Моторы
 left_motor  = MX1508(LEFT_MOTOR_IN1, LEFT_MOTOR_IN2)
 right_motor = MX1508(RIGHT_MOTOR_IN1, RIGHT_MOTOR_IN2)
 
+# Сервоприводы
 grip_pwm = PWM(Pin(GRIP_SERVO_PIN, Pin.OUT))
 grip_pwm.freq(SERVO_FREQ)
 
 bucket_pwm = PWM(Pin(BUCKET_SERVO_PIN, Pin.OUT))
 bucket_pwm.freq(SERVO_FREQ)
 
+# RFID
 spi_rfid = SPI(2, sck=Pin(RFID_SCK), mosi=Pin(RFID_MOSI), miso=Pin(RFID_MISO))
 rfid = MFRC522(spi=spi_rfid, gpioRst=Pin(RFID_RST), gpioCs=Pin(RFID_CS))
 
+# ---------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ----------
 def clamp(value, low, high):
     return min(high, max(low, value))
 
-def map_value(x, in_min, in_max, out_min, out_max):
-    return int((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min)
-
-def servo_write(pwm_pin, angle):
-    angle = clamp(int(angle), 0, 180)
-    duty = map_value(angle, 0, 180, SERVO_MIN_DUTY, SERVO_MAX_DUTY)
+def servo_speed(pwm_pin, duty):
+    """Задать скорость сервопривода 360°: 77 – стоп, 20 – полный вперёд, 120 – полный назад."""
+    duty = clamp(int(duty), 20, 120)
     pwm_pin.duty(duty)
+
+def servo_stop(pwm_pin):
+    servo_speed(pwm_pin, SERVO_STOP_DUTY)
+
+def grip_close():
+    servo_speed(grip_pwm, SERVO_FULL_SPEED_DUTY)
+    time.sleep_ms(GRIP_CLOSE_TIME_MS)
+    servo_stop(grip_pwm)
+
+def grip_open():
+    servo_speed(grip_pwm, SERVO_REVERSE_SPEED_DUTY)
+    time.sleep_ms(GRIP_OPEN_TIME_MS)
+    servo_stop(grip_pwm)
+
+def bucket_move_up():
+    servo_speed(bucket_pwm, SERVO_FULL_SPEED_DUTY)
+    time.sleep_ms(BUCKET_MOVE_TIME_MS)
+    servo_stop(bucket_pwm)
+
+def bucket_move_down():
+    servo_speed(bucket_pwm, SERVO_REVERSE_SPEED_DUTY)
+    time.sleep_ms(BUCKET_MOVE_TIME_MS)
+    servo_stop(bucket_pwm)
+
+def set_led_color(color):
+    """Зажечь ленту одним цветом. color – кортеж (R, G, B)."""
+    try:
+        np.fill(color)
+        np.write()
+    except Exception as e:
+        print("Ошибка LED:", e)
 
 def pulse_led():
     global led_pulse_started
@@ -115,6 +163,7 @@ def on_rx():
     except Exception as e:
         print("Ошибка декодирования:", e)
 
+# ---------- ДВИЖЕНИЕ ----------
 def motors_stop():
     left_motor.stop()
     right_motor.stop()
@@ -135,6 +184,7 @@ def motors_right(speed=TURN_SPEED):
     left_motor.forward(speed)
     right_motor.reverse(speed)
 
+# ---------- RFID ----------
 def get_exact_text(chunks):
     full_data = bytearray()
     for c in chunks:
@@ -158,21 +208,26 @@ def read_rfid_text():
     print("Request stat:", stat)
     if stat != rfid.OK:
         return None
+
     (stat, raw_uid) = rfid.anticoll()
     print("Anticoll stat:", stat)
     if stat != rfid.OK:
         return None
+
     print("UID:", [hex(b) for b in raw_uid])
+
     if rfid.select_tag(raw_uid) != rfid.OK:
         print("Select failed")
         return None
-    # Аутентификация сектора 1 (блок 4)
+
+    # Аутентификация сектора 1 (блок 4) ключом по умолчанию
     key = b'\xff\xff\xff\xff\xff\xff'
     auth_stat = rfid.auth(rfid.AUTHENT1A, 4, key, raw_uid)
     print("Auth stat:", auth_stat)
     if auth_stat != rfid.OK:
         rfid.stop_crypto1()
         return None
+
     block4 = bytearray(16)
     block5 = bytearray(16)
     stat4 = rfid.read(4, into=block4)
@@ -180,48 +235,62 @@ def read_rfid_text():
     stat5 = rfid.read(5, into=block5)
     print("Read block 5 stat:", stat5, "data:", block5)
     rfid.stop_crypto1()
+
     if stat4 is None or stat5 is None:
         return None
     return get_exact_text([block4, block5])
 
+# ---------- ЗАХВАТ И КОВШ ----------
 def grab_and_read_rfid():
-    servo_write(grip_pwm, GRIP_CLOSED_ANGLE)
-    time.sleep_ms(300)
+    grip_close()                    # закрываем клешню
     tag_text = read_rfid_text()
     if tag_text:
         print("RFID метка:", tag_text)
         send_status("rfid=" + tag_text)
+        t = tag_text.lower()
+        if t == "purple":
+            set_led_color((128, 0, 128))
+        elif t == "red":
+            set_led_color((255, 0, 0))
+        elif t == "blue":
+            set_led_color((0, 0, 255))
+        else:
+            set_led_color((0, 255, 0))
     else:
         print("Метка не прочитана")
         send_status("rfid=no_tag")
+        set_led_color((255, 255, 255))
 
 def release_cube():
-    servo_write(grip_pwm, GRIP_OPEN_ANGLE)
+    grip_open()
     print("Захват открыт")
     send_status("released")
 
 def bucket_up():
     global bucket_angle
     bucket_angle = clamp(bucket_angle + BUCKET_STEP, BUCKET_MIN_ANGLE, BUCKET_MAX_ANGLE)
-    servo_write(bucket_pwm, bucket_angle)
+    bucket_move_up()
     print("Ковш вверх, угол:", bucket_angle)
     send_status("bucket=" + str(bucket_angle))
 
 def bucket_down():
     global bucket_angle
     bucket_angle = clamp(bucket_angle - BUCKET_STEP, BUCKET_MIN_ANGLE, BUCKET_MAX_ANGLE)
-    servo_write(bucket_pwm, bucket_angle)
+    bucket_move_down()
     print("Ковш вниз, угол:", bucket_angle)
     send_status("bucket=" + str(bucket_angle))
 
+# ---------- ИНИЦИАЛИЗАЦИЯ BLE ----------
 ble = bluetooth.BLE()
 ble.config(gap_name=BLE_NAME)
 uart = BLEUART(ble, name=BLE_NAME)
 uart.irq(handler=on_rx)
 
+# ---------- СТАРТОВОЕ ПОЛОЖЕНИЕ ----------
 motors_stop()
-servo_write(grip_pwm, GRIP_OPEN_ANGLE)
-servo_write(bucket_pwm, bucket_angle)
+servo_stop(grip_pwm)
+servo_stop(bucket_pwm)
+set_led_color((0, 0, 0))
 
 print("ESP32 BLE UART готов")
 print("Имя BLE:", BLE_NAME)
@@ -229,6 +298,7 @@ print("Движение: 516-вперед, 615-назад, 414-влево, 315-�
 print("Кнопки: 1-захват+RFID, 2-разжать, 3-ковш вверх, 4-ковш вниз")
 send_status("ready")
 
+# ---------- АСИНХРОННЫЙ ЦИКЛ ----------
 async def do_it(int_ms):
     global comand, on
     while True:
@@ -302,4 +372,7 @@ try:
     loop.run_forever()
 except Exception:
     motors_stop()
+    servo_stop(grip_pwm)
+    servo_stop(bucket_pwm)
+    set_led_color((0, 0, 0))
     uart.close()
