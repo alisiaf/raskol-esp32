@@ -135,17 +135,17 @@ spi_rfid = SPI(2, sck=Pin(RFID_SCK), mosi=Pin(RFID_MOSI), miso=Pin(RFID_MISO))
 rfid = MFRC522(spi=spi_rfid, gpioRst=_rst, gpioCs=_cs)
 
 COLOR_MAP = {
-    "white":  (255, 255, 255),
+    "white":  (40, 40, 40),
     "black":  (0, 0, 0),
-    "red":    (255, 0, 0),
-    "yellow": (255, 255, 0),
-    "blue":   (0, 0, 255),
-    "green":  (0, 255, 0),
-    "orange": (255, 165, 0),
-    "pink":   (255, 105, 180),
-    "purple": (128, 0, 128),
-    "brown":  (139, 69, 19),
-    "grey":   (128, 128, 128)
+    "red":    (40, 0, 0),
+    "yellow": (32, 32, 0),
+    "blue":   (0, 0, 40),
+    "green":  (0, 40, 0),
+    "orange": (40, 16, 0),
+    "pink":   (40, 10, 20),
+    "purple": (20, 0, 30),
+    "brown":  (24, 10, 4),
+    "grey":   (20, 20, 20)
 }
 KNOWN_COLORS = tuple(COLOR_MAP.keys())
 
@@ -395,7 +395,7 @@ def grab_and_read_rfid():
     else:
         print("Метка не прочитана")
         send_status("rfid=no_tag")
-        set_led_color((40, 0, 40))
+        set_led_color((0, 28, 28))
 
 def release_cube():
     grip_open()
