@@ -45,17 +45,17 @@ SERVO_MAX_DUTY = 120
 GRIP_STOP_DUTY = 77
 GRIP_CLOSE_DUTY = 40
 GRIP_OPEN_DUTY = 120
-GRIP_CLOSE_TIME_MS = 400
-GRIP_OPEN_TIME_MS = 400
+GRIP_CLOSE_TIME_MS = 80
+GRIP_OPEN_TIME_MS = 100
 
 # Подъем. Не менять, эта логика у вас работала.
 BUCKET_STOP_DUTY = 77
-BUCKET_UP_DUTY = 40
-BUCKET_DOWN_DUTY = 120
-BUCKET_MOVE_TIME_MS = 300
+BUCKET_UP_DUTY = 30
+BUCKET_DOWN_DUTY = 94
+BUCKET_MOVE_TIME_MS = 120
 
-RFID_READ_ATTEMPTS = 8
-RFID_RETRY_DELAY_MS = 60
+RFID_READ_ATTEMPTS = 4
+RFID_RETRY_DELAY_MS = 25
 RFID_READ_BLOCKS = (4, 5, 6, 8)
 
 LOOP_DELAY_MS  = const(20)
@@ -135,17 +135,17 @@ spi_rfid = SPI(2, sck=Pin(RFID_SCK), mosi=Pin(RFID_MOSI), miso=Pin(RFID_MISO))
 rfid = MFRC522(spi=spi_rfid, gpioRst=_rst, gpioCs=_cs)
 
 COLOR_MAP = {
-    "white":  (40, 40, 40),
+    "white":  (8, 8, 8),
     "black":  (0, 0, 0),
-    "red":    (40, 0, 0),
-    "yellow": (32, 32, 0),
-    "blue":   (0, 0, 40),
-    "green":  (0, 40, 0),
-    "orange": (40, 16, 0),
-    "pink":   (40, 10, 20),
-    "purple": (20, 0, 30),
-    "brown":  (24, 10, 4),
-    "grey":   (20, 20, 20)
+    "red":    (8, 0, 0),
+    "yellow": (7, 7, 0),
+    "blue":   (0, 0, 8),
+    "green":  (0, 8, 0),
+    "orange": (8, 3, 0),
+    "pink":   (8, 2, 4),
+    "purple": (4, 0, 6),
+    "brown":  (5, 2, 1),
+    "grey":   (4, 4, 4)
 }
 KNOWN_COLORS = tuple(COLOR_MAP.keys())
 
@@ -395,7 +395,7 @@ def grab_and_read_rfid():
     else:
         print("Метка не прочитана")
         send_status("rfid=no_tag")
-        set_led_color((0, 28, 28))
+        set_led_color((0, 5, 5))
 
 def release_cube():
     grip_open()
