@@ -43,16 +43,17 @@ SERVO_MAX_DUTY = 120
 
 # Клешня. Оставляем управление по времени, как в исходной рабочей версии.
 GRIP_STOP_DUTY = 77
-GRIP_CLOSE_DUTY = 40
-GRIP_OPEN_DUTY = 120
-GRIP_CLOSE_TIME_MS = 80
-GRIP_OPEN_TIME_MS = 100
+GRIP_CLOSE_DUTY = 102
+GRIP_OPEN_DUTY = 46
+GRIP_CLOSE_TIME_MS = 120
+GRIP_OPEN_TIME_MS = 110
 
-# Подъем. Не менять, эта логика у вас работала.
+# Подъем. Оба серво теперь 360°, поэтому управление тоже по времени.
 BUCKET_STOP_DUTY = 77
-BUCKET_UP_DUTY = 30
-BUCKET_DOWN_DUTY = 94
-BUCKET_MOVE_TIME_MS = 120
+BUCKET_UP_DUTY = 50
+BUCKET_DOWN_DUTY = 92
+BUCKET_UP_TIME_MS = 70
+BUCKET_DOWN_TIME_MS = 120
 
 RFID_READ_ATTEMPTS = 4
 RFID_RETRY_DELAY_MS = 25
@@ -182,14 +183,14 @@ def grip_open():
 def bucket_move_up():
     global bucket_angle
     servo_speed(bucket_pwm, BUCKET_UP_DUTY)
-    time.sleep_ms(BUCKET_MOVE_TIME_MS)
+    time.sleep_ms(BUCKET_UP_TIME_MS)
     servo_stop(bucket_pwm, BUCKET_STOP_DUTY)
     bucket_angle = min(bucket_angle + 10, 160)
 
 def bucket_move_down():
     global bucket_angle
     servo_speed(bucket_pwm, BUCKET_DOWN_DUTY)
-    time.sleep_ms(BUCKET_MOVE_TIME_MS)
+    time.sleep_ms(BUCKET_DOWN_TIME_MS)
     servo_stop(bucket_pwm, BUCKET_STOP_DUTY)
     bucket_angle = max(bucket_angle - 10, 20)
 
@@ -499,4 +500,6 @@ except Exception as e:
         if led is not None:
             led.value(not led.value())
         time.sleep_ms(200)
+
+
 
